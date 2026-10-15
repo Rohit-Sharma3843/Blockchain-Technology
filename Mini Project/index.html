@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-Voting dApp</title>
+<style>
+  :root {
+    --paper: #ffffff;
+    --ink: #14213d;
+    --muted: #5b6475;
+    --rule: #d9dde5;
+    --wash: #f4f6fa;
+    --stamp: #b3261e;
+    --ok: #1d6b3a;
+    --serif: Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 20px 60px; }
+  h1 { font: 700 30px/1.2 var(--serif); margin: 0; }
+  h2 { font: 700 20px/1.3 var(--serif); margin: 0 0 12px; }
+  p { margin: 0 0 8px; }
+  .muted { color: var(--muted); }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+         padding-bottom: 16px; border-bottom: 2px solid var(--ink); }
+  button { font: inherit; cursor: pointer; border: 1.5px solid var(--ink); background: var(--ink); color: #fff;
+           padding: 8px 16px; border-radius: 4px; }
+  button.ghost { background: var(--paper); color: var(--ink); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #5b8def; outline-offset: 2px; }
+  input, textarea { font: inherit; width: 100%; padding: 8px 10px; border: 1.5px solid var(--rule); border-radius: 4px; background: #fff; color: var(--ink); }
+  label { display: block; font-weight: 600; margin: 10px 0 4px; }
+  .setup { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; margin: 16px 0; }
+  .status { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0;
+            border: 1px solid var(--rule); border-radius: 4px; margin-bottom: 24px; }
+  .status div { padding: 10px 14px; border-right: 1px solid var(--rule); }
+  .status div:last-child { border-right: 0; }
+  .status small { display: block; color: var(--muted); }
+  .status b { word-break: break-all; }
+  .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .status div { border-right: 0; border-bottom: 1px solid var(--rule); } }
+  .candidate { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .candidate .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .candidate .name { font: 700 18px/1.3 var(--serif); }
+  .bar { height: 8px; background: var(--wash); border-radius: 4px; margin: 8px 0 2px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--ink); }
+  .stamp { display: inline-block; border: 2px solid var(--stamp); color: var(--stamp); font-weight: 700;
+           padding: 2px 10px; border-radius: 4px; transform: rotate(-3deg); }
+  .panel { border: 1px solid var(--rule); border-radius: 4px; padding: 16px; background: var(--wash); }
+  .panel + .panel { margin-top: 16px; }
+  .winner { border: 2px solid var(--ink); padding: 14px 18px; margin: 0 0 20px; }
+  .winner b { font: 700 24px/1.3 var(--serif); }
+  #msg { margin-top: 18px; padding: 10px 14px; border-left: 4px solid var(--rule); background: var(--wash); min-height: 42px; }
+  #msg.error { border-color: var(--stamp); }
+  #msg.good { border-color: var(--ok); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div>
+      <h1>E-Voting dApp</h1>
+      <p class="muted">One registered wallet, one vote, recorded on the Sepolia test network.</p>
+    </div>
+    <button id="connectBtn">Connect MetaMask</button>
+  </div>
+
+  <div class="setup">
+    <div>
+      <label for="addr">Voting contract address</label>
+      <input id="addr" placeholder="0x... (copy it from Remix after deploying Voting.sol)" spellcheck="false">
+    </div>
+    <button id="loadBtn" class="ghost">Load election</button>
+  </div>
+
+  <div class="status" id="status">
+    <div><small>Your wallet</small><b id="stAccount">Not connected</b></div>
+    <div><small>Your role</small><b id="stRole">-</b></div>
+    <div><small>Election phase</small><b id="stPhase">-</b></div>
+    <div><small>Votes cast</small><b id="stTotal">-</b></div>
+  </div>
+
+  <div id="winnerBox" class="winner hidden"></div>
+
+  <div class="grid">
+    <section>
+      <h2>Ballot</h2>
+      <div id="candidates"><p class="muted">Connect your wallet and load the election to see the candidates.</p></div>
+    </section>
+
+    <section id="adminSection" class="hidden">
+      <h2>Admin panel</h2>
+      <div class="panel" id="panelAdd">
+        <label for="candName">Add a candidate</label>
+        <input id="candName" placeholder="Candidate name">
+        <p style="margin-top:8px"><button id="addCandBtn">Add candidate</button></p>
+      </div>
+      <div class="panel" id="panelVoters">
+        <label for="voterList">Register voters (wallet addresses)</label>
+        <textarea id="voterList" rows="4" placeholder="One address per line, or separated by commas"></textarea>
+        <p style="margin-top:8px"><button id="regBtn">Register voters</button></p>
+      </div>
+      <div class="panel">
+        <p class="muted" id="phaseHelp"></p>
+        <button id="startBtn">Start voting</button>
+        <button id="endBtn" class="ghost">End voting</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="msg" role="status" aria-live="polite">Install MetaMask, switch to Sepolia, then connect.</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script>
+const SEPOLIA_CHAIN_ID = "0xaa36a7";
+const PHASES = ["Registration", "Voting", "Ended"];
+const ABI = [
+  "function admin() view returns (address)",
+  "function phase() view returns (uint8)",
+  "function totalVotes() view returns (uint256)",
+  "function isRegistered(address) view returns (bool)",
+  "function hasVoted(address) view returns (bool)",
+  "function getCandidates() view returns (tuple(uint256 id, string name, uint256 voteCount)[])",
+  "function getWinner() view returns (string name, uint256 votes)",
+  "function addCandidate(string name)",
+  "function registerVoters(address[] voters)",
+  "function startVoting()",
+  "function endVoting()",
+  "function vote(uint256 candidateId)"
+];
+
+let provider, signer, contract, account;
+const $ = (id) => document.getElementById(id);
+
+function say(text, kind) {
+  const m = $("msg");
+  m.textContent = text;
+  m.className = kind || "";
+}
+
+function errText(e) {
+  return e.reason || (e.info && e.info.error && e.info.error.message) || e.shortMessage || e.message || String(e);
+}
+
+function short(a) { return a.slice(0, 6) + "..." + a.slice(-4); }
+
+async function connect() {
+  if (!window.ethereum) { say("MetaMask was not found. Install the MetaMask extension and reload this page.", "error"); return; }
+  try {
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    const chain = await window.ethereum.request({ method: "eth_chainId" });
+    if (chain !== SEPOLIA_CHAIN_ID) {
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: SEPOLIA_CHAIN_ID }] });
+    }
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    account = await signer.getAddress();
+    $("stAccount").textContent = short(account);
+    $("connectBtn").textContent = "Connected";
+    say("Wallet connected on Sepolia. Paste the contract address and load the election.", "good");
+    if ($("addr").value) await loadContract();
+  } catch (e) { say(errText(e), "error"); }
+}
+
+async function loadContract() {
+  const a = $("addr").value.trim();
+  if (!signer) { say("Connect your wallet first.", "error"); return; }
+  if (!ethers.isAddress(a)) { say("That is not a valid contract address.", "error"); return; }
+  contract = new ethers.Contract(a, ABI, signer);
+  try { localStorage.setItem("votingAddress", a); } catch (e) {}
+  await refresh();
+}
+
+async function refresh() {
+  if (!contract) return;
+  try {
+    const [admin, phase, total, reg, voted, cands] = await Promise.all([
+      contract.admin(), contract.phase(), contract.totalVotes(),
+      contract.isRegistered(account), contract.hasVoted(account), contract.getCandidates()
+    ]);
+    const p = Number(phase);
+    const isAdmin = admin.toLowerCase() === account.toLowerCase();
+
+    $("stPhase").textContent = PHASES[p];
+    $("stTotal").textContent = total.toString();
+    $("stRole").textContent = isAdmin ? "Admin" : reg ? (voted ? "Registered voter (already voted)" : "Registered voter") : "Not registered";
+
+    renderCandidates(cands, p, reg, voted, Number(total));
+    renderAdmin(isAdmin, p);
+    await renderWinner(p);
+  } catch (e) { say("Could not read the contract. Check the address and that MetaMask is on Sepolia. " + errText(e), "error"); }
+}
+
+function renderCandidates(cands, p, reg, voted, total) {
+  const box = $("candidates");
+  box.textContent = "";
+  if (cands.length === 0) {
+    const none = document.createElement("p");
+    none.className = "muted";
+    none.textContent = "No candidates yet. The admin adds them during Registration.";
+    box.appendChild(none);
+    return;
+  }
+  cands.forEach((c) => {
+    const votes = Number(c.voteCount);
+    const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
+
+    const wrap = document.createElement("div"); wrap.className = "candidate";
+    const row = document.createElement("div"); row.className = "row";
+    const name = document.createElement("span"); name.className = "name"; name.textContent = c.name;
+    row.appendChild(name);
+
+    if (p === 1) {
+      const btn = document.createElement("button");
+      btn.textContent = "Vote";
+      btn.disabled = !reg || voted;
+      btn.title = !reg ? "Your wallet is not registered" : voted ? "You have already voted" : "";
+      btn.addEventListener("click", () => send(() => contract.vote(c.id), "Vote"));
+      row.appendChild(btn);
+    }
+    wrap.appendChild(row);
+
+    const bar = document.createElement("div"); bar.className = "bar";
+    const fill = document.createElement("span"); fill.style.width = pct + "%";
+    bar.appendChild(fill); wrap.appendChild(bar);
+
+    const count = document.createElement("small"); count.className = "muted";
+    count.textContent = votes + (votes === 1 ? " vote" : " votes") + " (" + pct + "%)";
+    wrap.appendChild(count);
+    box.appendChild(wrap);
+  });
+  if (voted) {
+    const s = document.createElement("p");
+    const st = document.createElement("span"); st.className = "stamp"; st.textContent = "VOTE RECORDED";
+    s.style.marginTop = "16px"; s.appendChild(st); box.appendChild(s);
+  }
+}
+
+function renderAdmin(isAdmin, p) {
+  $("adminSection").classList.toggle("hidden", !isAdmin);
+  if (!isAdmin) return;
+  $("panelAdd").classList.toggle("hidden", p !== 0);
+  $("panelVoters").classList.toggle("hidden", p !== 0);
+  $("startBtn").disabled = p !== 0;
+  $("endBtn").disabled = p !== 1;
+  $("phaseHelp").textContent =
+    p === 0 ? "Add at least 2 candidates and register voters, then start voting." :
+    p === 1 ? "Voting is open. End voting to publish the result." : "The election has ended.";
+}
+
+async function renderWinner(p) {
+  const w = $("winnerBox");
+  if (p !== 2) { w.classList.add("hidden"); return; }
+  const r = await contract.getWinner();
+  w.textContent = "";
+  const label = document.createElement("p"); label.className = "muted"; label.textContent = "Result";
+  const nm = document.createElement("b"); nm.textContent = r[0];
+  const v = document.createElement("p"); v.textContent = r[1].toString() + " votes";
+  w.appendChild(label); w.appendChild(nm); w.appendChild(v);
+  w.classList.remove("hidden");
+}
+
+async function send(makeTx, label) {
+  try {
+    say(label + ": confirm the transaction in MetaMask...");
+    const tx = await makeTx();
+    say(label + ": waiting for the network to confirm (about 15 seconds)...");
+    await tx.wait();
+    say(label + " confirmed. Transaction: " + tx.hash, "good");
+    await refresh();
+  } catch (e) { say(label + " failed: " + errText(e), "error"); }
+}
+
+$("connectBtn").addEventListener("click", connect);
+$("loadBtn").addEventListener("click", loadContract);
+$("addCandBtn").addEventListener("click", () => {
+  const n = $("candName").value.trim();
+  if (!n) { say("Enter a candidate name.", "error"); return; }
+  send(() => contract.addCandidate(n), "Add candidate").then(() => { $("candName").value = ""; });
+});
+$("regBtn").addEventListener("click", () => {
+  const list = $("voterList").value.split(/[\s,;]+/).filter(Boolean);
+  if (list.length === 0) { say("Paste at least one wallet address.", "error"); return; }
+  const bad = list.find((x) => !ethers.isAddress(x));
+  if (bad) { say("Not a valid address: " + bad, "error"); return; }
+  send(() => contract.registerVoters(list), "Register voters").then(() => { $("voterList").value = ""; });
+});
+$("startBtn").addEventListener("click", () => send(() => contract.startVoting(), "Start voting"));
+$("endBtn").addEventListener("click", () => send(() => contract.endVoting(), "End voting"));
+
+if (window.ethereum) {
+  window.ethereum.on("accountsChanged", () => location.reload());
+  window.ethereum.on("chainChanged", () => location.reload());
+}
+try { const saved = localStorage.getItem("votingAddress"); if (saved) $("addr").value = saved; } catch (e) {}
+setInterval(refresh, 12000);
+</script>
+</body>
+</html>
